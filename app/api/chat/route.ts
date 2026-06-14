@@ -4,7 +4,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { chatResponseSchema, type ChatResponse } from "@/lib/chat-schema";
 import { env } from "@/lib/env";
-import { meetingRequestSchema } from "@/lib/meeting-schema";
+import { meetingRequestSchema, type MeetingRequest } from "@/lib/meeting-schema";
 import {
   createParticipantMaskContext,
   maskParticipantText,
@@ -45,6 +45,10 @@ const fallbackMeetingRequest = {
     end: null,
   },
   timeOfDay: "unspecified",
+  timeWindow: {
+    startMinute: null,
+    endMinute: null,
+  },
   weekdaysOnly: true,
   constraints: {
     avoidLunch: true,
@@ -103,7 +107,8 @@ export async function POST(request: Request) {
 
   if (!env.openaiApiKey) {
     const output = createMockResponse(parsed.data.message, parsed.data.resolvedParticipants);
-    const result = withProgrammaticScheduleResult(output);
+    const normalizedOutput = normalizeScheduleRequestFromMessage(output, parsed.data.message);
+    const result = withProgrammaticScheduleResult(normalizedOutput);
     logChatPipeline("mock_response", {
       intent: result.intent,
       hasScheduleRequest: Boolean(result.scheduleRequest),
@@ -140,6 +145,9 @@ export async function POST(request: Request) {
             "maskedParticipants を正として扱い、本文中の名前から勝手に同姓同名を推測しないでください。",
             "参加者を返す場合、displayName には必ず maskedParticipants の alias をそのまま入れてください。email と id は null にしてください。",
             "maskedParticipants が空で参加者が必要な依頼なら、participants は空配列のままにし、reply でメンション選択を促してください。",
+            "今日、明日、明後日などの相対日付は currentDateJst を基準に dateRange.type=custom とし、start と end に同じ日付を入れてください。",
+            "3時から、15:00から、午後3時から、など開始時刻がある場合は timeWindow.startMinute に0時からの分数を入れてください。",
+            "業務時間の文脈で午前/午後が未指定の1時から7時は午後として扱ってください。例: 3時から は15:00として startMinute=900。",
             "日付が不明な場合は dateRange.type を unspecified にしてください。",
             "候補件数は3から5に丸めてください。",
             "reply は日本語で、ユーザーにそのまま返せる短い文章にしてください。",
@@ -149,6 +157,7 @@ export async function POST(request: Request) {
           role: "user",
           content: JSON.stringify({
             currentMessage: maskedMessage,
+            currentDateJst: formatDateKey(getJstToday()),
             maskedParticipants: maskContext.maskedParticipants,
             recentHistory: [],
           }),
@@ -164,11 +173,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to parse OpenAI response" }, { status: 502 });
     }
 
-    const restoredOutput = restoreOpenAiOutput(output, maskContext);
+    const restoredOutput = normalizeScheduleRequestFromMessage(restoreOpenAiOutput(output, maskContext), parsed.data.message);
     logChatPipeline("openai_response", {
       intent: restoredOutput.intent,
       hasScheduleRequest: Boolean(restoredOutput.scheduleRequest),
-      scheduleRequest: toMaskedScheduleRequestForLog(output, maskContext),
+      scheduleRequest: toMaskedScheduleRequestForLog(restoredOutput, maskContext),
     });
 
     const result = withProgrammaticScheduleResult(restoredOutput);
@@ -215,6 +224,140 @@ function restoreOpenAiOutput(
       participants: restoredParticipants,
     },
   };
+}
+
+function normalizeScheduleRequestFromMessage(output: ChatResponse, message: string): ChatResponse {
+  if (output.intent !== "schedule_request" || !output.scheduleRequest) {
+    return output;
+  }
+
+  const explicitDate = extractExplicitDate(message);
+  const explicitStartMinute = extractStartMinute(message);
+  const normalizedRequest: MeetingRequest = {
+    ...output.scheduleRequest,
+    dateRange: explicitDate
+      ? {
+          type: "custom",
+          start: toJstDateStartIso(explicitDate),
+          end: toJstDateStartIso(explicitDate),
+        }
+      : output.scheduleRequest.dateRange,
+    timeOfDay: explicitStartMinute !== null ? inferTimeOfDay(explicitStartMinute) : output.scheduleRequest.timeOfDay,
+    timeWindow: {
+      startMinute: explicitStartMinute ?? output.scheduleRequest.timeWindow.startMinute,
+      endMinute: output.scheduleRequest.timeWindow.endMinute,
+    },
+  };
+
+  return {
+    ...output,
+    scheduleRequest: normalizedRequest,
+  };
+}
+
+type CalendarDate = {
+  year: number;
+  month: number;
+  day: number;
+};
+
+function extractExplicitDate(message: string): CalendarDate | null {
+  const today = getJstToday();
+
+  if (/(今日|本日)/.test(message)) {
+    return today;
+  }
+
+  if (/(明日|あした|翌日)/.test(message)) {
+    return addCalendarDays(today, 1);
+  }
+
+  if (/(明後日|あさって)/.test(message)) {
+    return addCalendarDays(today, 2);
+  }
+
+  const monthDayMatch = message.match(/(\d{1,2})\s*[月\/]\s*(\d{1,2})\s*日?/);
+  if (monthDayMatch) {
+    return {
+      year: today.year,
+      month: Number(monthDayMatch[1]),
+      day: Number(monthDayMatch[2]),
+    };
+  }
+
+  return null;
+}
+
+function extractStartMinute(message: string): number | null {
+  const timeMatch = message.match(/(?:(午前|午後)\s*)?(\d{1,2})(?::([0-5]\d)|時(?!間)\s*([0-5]?\d)?\s*分?)\s*(?:から|以降|開始|スタート)?/);
+
+  if (!timeMatch) {
+    return null;
+  }
+
+  const period = timeMatch[1];
+  const rawHour = Number(timeMatch[2]);
+  const rawMinute = Number(timeMatch[3] ?? timeMatch[4] ?? 0);
+  let hour = rawHour;
+
+  if (period === "午後" && hour < 12) {
+    hour += 12;
+  }
+
+  if (!period && hour >= 1 && hour <= 7) {
+    hour += 12;
+  }
+
+  if (hour > 23) {
+    return null;
+  }
+
+  return hour * 60 + rawMinute;
+}
+
+function inferTimeOfDay(minuteOfDay: number): MeetingRequest["timeOfDay"] {
+  if (minuteOfDay < 12 * 60) {
+    return "morning";
+  }
+
+  if (minuteOfDay < 18 * 60) {
+    return "afternoon";
+  }
+
+  return "all_day";
+}
+
+function getJstToday(): CalendarDate {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(new Date());
+
+  return {
+    year: Number(parts.find((part) => part.type === "year")?.value),
+    month: Number(parts.find((part) => part.type === "month")?.value),
+    day: Number(parts.find((part) => part.type === "day")?.value),
+  };
+}
+
+function addCalendarDays(date: CalendarDate, days: number): CalendarDate {
+  const next = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+  return {
+    year: next.getUTCFullYear(),
+    month: next.getUTCMonth() + 1,
+    day: next.getUTCDate(),
+  };
+}
+
+function toJstDateStartIso(date: CalendarDate) {
+  const utc = new Date(Date.UTC(date.year, date.month - 1, date.day, -9, 0));
+  return utc.toISOString();
+}
+
+function formatDateKey(date: CalendarDate) {
+  return `${date.year}-${date.month.toString().padStart(2, "0")}-${date.day.toString().padStart(2, "0")}`;
 }
 
 function logChatPipeline(event: string, details: Record<string, unknown>) {

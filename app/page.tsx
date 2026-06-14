@@ -208,8 +208,15 @@ export default function Home() {
     });
   }, [mentionQuery]);
 
-  const participantLabel = selected.length
-    ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
+  const summaryParticipants = lastAiResult?.scheduleRequest?.participants;
+  const participantLabel = summaryParticipants?.length
+    ? summaryParticipants
+        .map((participant) =>
+          participant.email ? `${participant.displayName}（${participant.email}）` : participant.displayName
+        )
+        .join("、")
+    : selected.length
+      ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
     : "未選択";
   const overflowParticipantCount = Math.max(selected.length - visibleParticipantLimit, 0);
   const visibleParticipants = participantsExpanded ? selected : selected.slice(0, visibleParticipantLimit);
@@ -429,6 +436,8 @@ export default function Home() {
     ]);
     setInput("");
     setMentionOpen(false);
+    setParticipantsExpanded(false);
+    setSelected([]);
 
     try {
       const response = await fetch("/api/chat", {
@@ -784,13 +793,19 @@ function scrollMessagesToBottom(container: HTMLDivElement | null) {
 function convertMeetingRequestToParsed(request: MeetingRequest): ParsedRequest {
   return {
     duration: `${request.durationMinutes}分`,
-    range: convertDateRangeLabel(request.dateRange.type),
-    timeOfDay: convertTimeOfDayLabel(request.timeOfDay),
+    range: convertDateRangeLabel(request.dateRange),
+    timeOfDay: convertTimeWindowLabel(request) ?? convertTimeOfDayLabel(request.timeOfDay),
     count: request.candidateCount,
   };
 }
 
-function convertDateRangeLabel(type: MeetingRequest["dateRange"]["type"]) {
+function convertDateRangeLabel(dateRange: MeetingRequest["dateRange"]) {
+  if (dateRange.type === "custom" && dateRange.start && dateRange.end) {
+    const startLabel = formatDateRangeValue(dateRange.start);
+    const endLabel = formatDateRangeValue(dateRange.end);
+    return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
+  }
+
   const labels = {
     this_week: "今週中",
     next_week: "来週",
@@ -798,7 +813,22 @@ function convertDateRangeLabel(type: MeetingRequest["dateRange"]["type"]) {
     unspecified: "未指定",
   } satisfies Record<MeetingRequest["dateRange"]["type"], string>;
 
-  return labels[type];
+  return labels[dateRange.type];
+}
+
+function formatDateRangeValue(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "期間指定";
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
 }
 
 function convertTimeOfDayLabel(type: MeetingRequest["timeOfDay"]) {
@@ -810,6 +840,31 @@ function convertTimeOfDayLabel(type: MeetingRequest["timeOfDay"]) {
   } satisfies Record<MeetingRequest["timeOfDay"], string>;
 
   return labels[type];
+}
+
+function convertTimeWindowLabel(request: MeetingRequest) {
+  const startMinute = request.timeWindow.startMinute;
+  const endMinute = request.timeWindow.endMinute;
+
+  if (startMinute === null && endMinute === null) {
+    return null;
+  }
+
+  if (startMinute !== null && endMinute !== null) {
+    return `${formatMinuteLabel(startMinute)} - ${formatMinuteLabel(endMinute)}`;
+  }
+
+  if (startMinute !== null) {
+    return `${formatMinuteLabel(startMinute)}以降`;
+  }
+
+  return `${formatMinuteLabel(endMinute ?? 0)}まで`;
+}
+
+function formatMinuteLabel(minuteOfDay: number) {
+  const hour = Math.floor(minuteOfDay / 60);
+  const minute = minuteOfDay % 60;
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
 }
 
 function convertCandidateToCard(candidate: MeetingCandidate, index: number): Candidate {

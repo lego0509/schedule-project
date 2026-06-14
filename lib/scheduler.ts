@@ -106,6 +106,9 @@ function resolveTargetDates(request: MeetingRequest): CalendarDate[] {
     const start = parseIsoAsJstDate(request.dateRange.start);
     const end = parseIsoAsJstDate(request.dateRange.end);
     if (start && end) {
+      if (compareCalendarDate(start, end) === 0) {
+        return [start];
+      }
       return enumerateBusinessDates(start, end, request.weekdaysOnly).slice(0, 10);
     }
   }
@@ -134,7 +137,7 @@ function resolveTargetDates(request: MeetingRequest): CalendarDate[] {
 
 function buildSlotsForDate(date: CalendarDate, request: MeetingRequest): CandidateSlot[] {
   const duration = request.durationMinutes;
-  const windows = getTargetWindows(request.timeOfDay);
+  const windows = getTargetWindows(request);
   const slots: CandidateSlot[] = [];
 
   windows.forEach((window) => {
@@ -154,14 +157,20 @@ function buildSlotsForDate(date: CalendarDate, request: MeetingRequest): Candida
   return slots;
 }
 
-function getTargetWindows(timeOfDay: MeetingRequest["timeOfDay"]) {
-  if (timeOfDay === "morning") {
-    return [{ start: 9 * 60, end: 12 * 60 }];
-  }
-  if (timeOfDay === "afternoon") {
-    return [{ start: 13 * 60, end: 18 * 60 }];
-  }
-  return [{ start: 9 * 60, end: 18 * 60 }];
+function getTargetWindows(request: MeetingRequest) {
+  const baseWindows =
+    request.timeOfDay === "morning"
+      ? [{ start: 9 * 60, end: 12 * 60 }]
+      : request.timeOfDay === "afternoon"
+        ? [{ start: 13 * 60, end: 18 * 60 }]
+        : [{ start: 9 * 60, end: 18 * 60 }];
+
+  return baseWindows
+    .map((window) => ({
+      start: Math.max(window.start, request.timeWindow.startMinute ?? window.start),
+      end: Math.min(window.end, request.timeWindow.endMinute ?? window.end),
+    }))
+    .filter((window) => window.start < window.end);
 }
 
 function isExcludedByFixedRules(start: number, end: number, request: MeetingRequest) {
@@ -185,7 +194,7 @@ function isSlotAvailable(slot: CandidateSlot, availability: CalendarAvailability
 function scoreSlot(slot: CandidateSlot, request: MeetingRequest): Omit<MeetingCandidate, "id"> {
   const startAt = toJstIso(slot.date, slot.startMinute);
   const endAt = toJstIso(slot.date, slot.endMinute);
-  const preferredMinute = request.timeOfDay === "afternoon" ? 13 * 60 + 30 : 10 * 60;
+  const preferredMinute = request.timeWindow.startMinute ?? (request.timeOfDay === "afternoon" ? 13 * 60 + 30 : 10 * 60);
   const distancePenalty = Math.abs(slot.startMinute - preferredMinute) / 30;
   const dayPenalty = businessDayOffset(getJstToday(), slot.date);
   const score = 100 - distancePenalty * 2 - dayPenalty;
@@ -193,6 +202,7 @@ function scoreSlot(slot: CandidateSlot, request: MeetingRequest): Omit<MeetingCa
 
   if (request.timeOfDay === "morning") tags.push("午前");
   if (request.timeOfDay === "afternoon") tags.push("午後");
+  if (request.timeWindow.startMinute !== null) tags.push(`${formatMinuteOfDay(request.timeWindow.startMinute)}以降`);
   if (request.constraints.avoidLunch) tags.push("昼休み回避");
   if (request.constraints.avoidFocusTime) tags.push("集中時間回避");
 
@@ -212,6 +222,7 @@ function buildReason(request: MeetingRequest) {
   const parts = ["全員の予定が空いている仮データ上で衝突がありません"];
   if (request.constraints.avoidLunch) parts.push("昼休みに重ならない枠です");
   if (request.constraints.avoidFocusTime) parts.push("集中時間帯を避けています");
+  if (request.timeWindow.startMinute !== null) parts.push(`${formatMinuteOfDay(request.timeWindow.startMinute)}以降の条件に合わせています`);
   return `${parts.join("。")}。`;
 }
 
@@ -335,6 +346,12 @@ function formatTimeLabel(value: string) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
+}
+
+function formatMinuteOfDay(minuteOfDay: number) {
+  const hour = Math.floor(minuteOfDay / 60);
+  const minute = minuteOfDay % 60;
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
 }
 
 function overlaps(startA: number, endA: number, startB: number, endB: number) {

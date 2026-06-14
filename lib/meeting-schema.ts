@@ -16,6 +16,15 @@ export const meetingRequestSchema = z.object({
     end: z.string().nullable().default(null),
   }),
   timeOfDay: z.enum(["morning", "afternoon", "all_day", "unspecified"]),
+  timeWindow: z
+    .object({
+      startMinute: z.number().int().min(0).max(1439).nullable().default(null),
+      endMinute: z.number().int().min(0).max(1440).nullable().default(null),
+    })
+    .default({
+      startMinute: null,
+      endMinute: null,
+    }),
   weekdaysOnly: z.boolean(),
   constraints: z.object({
     avoidLunch: z.boolean(),
