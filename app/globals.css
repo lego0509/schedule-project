@@ -96,6 +96,16 @@ button {
   color: #b42318;
 }
 
+.skip-login-button {
+  margin-top: 16px;
+  border: 1px dashed var(--primary);
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--primary-dark);
+  font-weight: 900;
+}
+
 .login-grid {
   display: grid;
   gap: 14px;

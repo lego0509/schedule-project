@@ -266,6 +266,13 @@ export default function Home() {
     setRole(null);
   }
 
+  function handleSkipLogin() {
+    setAuthError(null);
+    setAuthUser(null);
+    window.sessionStorage.setItem(loginRoleStorageKey, "利用者");
+    setRole("利用者");
+  }
+
   if (!role) {
     return (
       <section className="login-screen" aria-label="ログイン">
@@ -284,6 +291,9 @@ export default function Home() {
                 ? "個人Microsoftアカウントでログインできます。"
                 : "Supabase環境変数を設定するとMicrosoftログインを試せます。")}
           </p>
+          <button className="skip-login-button" type="button" onClick={handleSkipLogin}>
+            テスト用にログインなしで利用者画面へ
+          </button>
         </div>
 
         <div className="login-grid">
