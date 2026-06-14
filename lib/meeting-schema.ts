@@ -3,17 +3,17 @@ import { z } from "zod";
 export const meetingRequestSchema = z.object({
   participants: z.array(
     z.object({
-      id: z.string().optional(),
+      id: z.string().nullable(),
       displayName: z.string(),
-      email: z.string().email().optional(),
-      required: z.boolean().default(true),
+      email: z.string().email().nullable(),
+      required: z.boolean(),
     })
   ),
   durationMinutes: z.union([z.literal(30), z.literal(60), z.literal(90)]),
   dateRange: z.object({
     type: z.enum(["this_week", "next_week", "custom", "unspecified"]),
-    start: z.string().optional(),
-    end: z.string().optional(),
+    start: z.string().nullable(),
+    end: z.string().nullable(),
   }),
   timeOfDay: z.enum(["morning", "afternoon", "all_day", "unspecified"]),
   weekdaysOnly: z.boolean(),

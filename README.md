@@ -29,6 +29,22 @@ http://127.0.0.1:3000
 
 This repository can be deployed to Vercel as a Next.js app.
 
+## Environment Variables
+
+OpenAI is optional in local development. If `OPENAI_API_KEY` is not set, `/api/chat` returns a deterministic mock response.
+
+```text
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.1-mini
+```
+
+The chat API classifies input into:
+
+- `small_talk`
+- `schedule_request`
+
+For `schedule_request`, it returns a structured `scheduleRequest` JSON object that can later be passed to calendar providers.
+
 Later phases will replace the current mock login and mock participant search with:
 
 - Supabase Auth

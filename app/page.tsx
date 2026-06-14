@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import type { ChatResponse } from "@/lib/chat-schema";
+import type { MeetingRequest } from "@/lib/meeting-schema";
 
 type Role = "利用者" | "管理者";
 
@@ -15,6 +17,10 @@ type Contact = {
 type Message = {
   role: "assistant" | "user";
   text: string;
+};
+
+type ChatApiResponse = ChatResponse & {
+  mode: "mock" | "openai";
 };
 
 type Candidate = {
@@ -134,6 +140,8 @@ export default function Home() {
   const [mobilePanel, setMobilePanel] = useState<"chat" | "insights">("chat");
   const [input, setInput] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Contact[]>([]);
   const [parsed, setParsed] = useState<ParsedRequest>({
     duration: "60分",
@@ -147,6 +155,7 @@ export default function Home() {
       text: "@で参加者を検索してから、会議時間や期間を入力してください。同姓同名でもメールアドレスで判別します。",
     },
   ]);
+  const [lastAiResult, setLastAiResult] = useState<ChatApiResponse | null>(null);
 
   const mentionQuery = useMemo(() => {
     const match = input.match(/@([^\s@]*)$/);
@@ -240,26 +249,63 @@ export default function Home() {
     setSelected((current) => current.filter((contact) => contact.id !== id));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
     if (!text) {
       return;
     }
 
-    const nextParsed = parseMeetingRequest(text);
-    setParsed(nextParsed);
+    const history = messages.slice(-8);
+    const resolvedParticipants = selected.map((contact) => ({
+      id: contact.id,
+      displayName: contact.displayName,
+      email: contact.email,
+    }));
+
+    setApiError(null);
+    setIsSending(true);
     setMessages((current) => [
       ...current,
       { role: "user", text },
-      {
-        role: "assistant",
-        text: `${participantSummary(selected)}との${nextParsed.duration}会議について、${nextParsed.range}の${nextParsed.timeOfDay}で候補を${nextParsed.count}件作成しました。参加者はメールアドレスで確定済みです。`,
-      },
     ]);
     setInput("");
     setMentionOpen(false);
-    setMobilePanel("insights");
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: text,
+          history,
+          resolvedParticipants,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("AI応答の取得に失敗しました。");
+      }
+
+      const result = (await response.json()) as ChatApiResponse;
+      setLastAiResult(result);
+      setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
+
+      if (result.intent === "schedule_request" && result.scheduleRequest) {
+        setParsed(convertMeetingRequestToParsed(result.scheduleRequest));
+        setMobilePanel("insights");
+      } else {
+        setMobilePanel("chat");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI応答の取得に失敗しました。";
+      setApiError(message);
+      setMessages((current) => [...current, { role: "assistant", text: message }]);
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -314,7 +360,7 @@ export default function Home() {
               <h2>依頼内容</h2>
               <p>@を入力して、候補から参加者を確定できます。</p>
             </div>
-            <span className="status-pill">モック接続</span>
+            <span className="status-pill">{lastAiResult?.mode === "openai" ? "AI接続" : "AI判定"}</span>
           </div>
 
           <div className="quick-prompts" aria-label="入力例">
@@ -396,7 +442,9 @@ export default function Home() {
                 }
               }}
             />
-            <button type="submit">送信</button>
+            <button type="submit" disabled={isSending}>
+              {isSending ? "送信中" : "送信"}
+            </button>
           </form>
         </section>
 
@@ -408,7 +456,7 @@ export default function Home() {
             <section className="summary-section">
               <div className="section-heading">
                 <h2>抽出された条件</h2>
-                <span>AI JSON化予定</span>
+                <span>{lastAiResult?.intent === "small_talk" ? "雑談" : "AI JSON"}</span>
               </div>
               <div className="condition-grid">
                 <div>
@@ -428,6 +476,26 @@ export default function Home() {
                   <strong>{parsed.timeOfDay}</strong>
                 </div>
               </div>
+            </section>
+
+            <section className="json-preview">
+              <div className="section-heading">
+                <h2>AI判定結果</h2>
+                <span>{apiError ? "エラー" : lastAiResult?.mode ?? "未送信"}</span>
+              </div>
+              <pre>
+                {lastAiResult
+                  ? JSON.stringify(
+                      {
+                        intent: lastAiResult.intent,
+                        reply: lastAiResult.reply,
+                        scheduleRequest: lastAiResult.scheduleRequest,
+                      },
+                      null,
+                      2
+                    )
+                  : "チャットを送信すると、雑談/スケジュール依頼の判定結果とJSONがここに表示されます。"}
+              </pre>
             </section>
 
             <section className="candidate-section">
@@ -507,4 +575,35 @@ function parseMeetingRequest(text: string): ParsedRequest {
 
 function participantSummary(participants: Contact[]) {
   return participants.length ? participants.map((contact) => contact.displayName).join("、") : "指定参加者";
+}
+
+function convertMeetingRequestToParsed(request: MeetingRequest): ParsedRequest {
+  return {
+    duration: `${request.durationMinutes}分`,
+    range: convertDateRangeLabel(request.dateRange.type),
+    timeOfDay: convertTimeOfDayLabel(request.timeOfDay),
+    count: request.candidateCount,
+  };
+}
+
+function convertDateRangeLabel(type: MeetingRequest["dateRange"]["type"]) {
+  const labels = {
+    this_week: "今週中",
+    next_week: "来週",
+    custom: "期間指定",
+    unspecified: "未指定",
+  } satisfies Record<MeetingRequest["dateRange"]["type"], string>;
+
+  return labels[type];
+}
+
+function convertTimeOfDayLabel(type: MeetingRequest["timeOfDay"]) {
+  const labels = {
+    morning: "午前のみ",
+    afternoon: "午後のみ",
+    all_day: "終日",
+    unspecified: "未指定",
+  } satisfies Record<MeetingRequest["timeOfDay"], string>;
+
+  return labels[type];
 }
