@@ -532,35 +532,11 @@ button {
 
 .summary-section,
 .candidate-section,
-.calendar-preview,
-.json-preview {
+.calendar-preview {
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px;
   box-shadow: var(--shadow);
-}
-
-.json-preview {
-  background: #0f1f1c;
-  color: #dff8f2;
-}
-
-.json-preview .section-heading h2,
-.json-preview .section-heading span {
-  color: #dff8f2;
-}
-
-.json-preview pre {
-  max-height: 260px;
-  margin: 0;
-  overflow: auto;
-  border-radius: 10px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #dff8f2;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
 }
 
 .section-heading {
@@ -782,8 +758,7 @@ button {
 
   .summary-section,
   .candidate-section,
-  .calendar-preview,
-  .json-preview {
+  .calendar-preview {
     box-shadow: none;
   }
 }
@@ -858,8 +833,7 @@ button {
   .chat-panel,
   .summary-section,
   .candidate-section,
-  .calendar-preview,
-  .json-preview {
+  .calendar-preview {
     border-right: 0;
     border-left: 0;
     border-radius: 0;

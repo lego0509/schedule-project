@@ -65,6 +65,12 @@ Mentioned participant names are masked before calling OpenAI:
 
 The server restores the original participant names after receiving the structured response. OpenAI does not receive selected participant names, emails, or IDs.
 
+## Debug Logging
+
+- Browser console: `/api/chat` response details such as `intent`, `scheduleRequest`, `calendarAvailability`, and `candidates`.
+- Server/Vercel logs: masking and candidate-calculation steps with participant aliases only.
+- Server/Vercel logs do not print selected participant names, emails, or IDs.
+
 Later phases will replace the current mock login and mock participant search with:
 
 - Supabase Auth

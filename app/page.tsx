@@ -144,7 +144,6 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Contact[]>([]);
   const [parsed, setParsed] = useState<ParsedRequest>({
     duration: "60分",
@@ -266,7 +265,6 @@ export default function Home() {
       email: contact.email,
     }));
 
-    setApiError(null);
     setIsSending(true);
     setMessages((current) => [
       ...current,
@@ -294,6 +292,7 @@ export default function Home() {
       }
 
       const result = (await response.json()) as ChatApiResponse;
+      logChatApiResult(result);
       setLastAiResult(result);
       setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
 
@@ -311,7 +310,7 @@ export default function Home() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI応答の取得に失敗しました。";
-      setApiError(message);
+      console.error("[ScheduleAI] Chat API error", error);
       setMessages((current) => [...current, { role: "assistant", text: message }]);
     } finally {
       setIsSending(false);
@@ -488,28 +487,6 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="json-preview">
-              <div className="section-heading">
-                <h2>AI判定結果</h2>
-                <span>{apiError ? "エラー" : lastAiResult?.mode ?? "未送信"}</span>
-              </div>
-              <pre>
-                {lastAiResult
-                  ? JSON.stringify(
-                      {
-                        intent: lastAiResult.intent,
-                        reply: lastAiResult.reply,
-                        scheduleRequest: lastAiResult.scheduleRequest,
-                        calendarAvailability: lastAiResult.calendarAvailability,
-                        candidates: lastAiResult.candidates,
-                      },
-                      null,
-                      2
-                    )
-                  : "チャットを送信すると、雑談/スケジュール依頼の判定結果とJSONがここに表示されます。"}
-              </pre>
-            </section>
-
             <section className="candidate-section">
               <div className="section-heading">
                 <h2>候補日</h2>
@@ -587,6 +564,17 @@ function parseMeetingRequest(text: string): ParsedRequest {
 
 function participantSummary(participants: Contact[]) {
   return participants.length ? participants.map((contact) => contact.displayName).join("、") : "指定参加者";
+}
+
+function logChatApiResult(result: ChatApiResponse) {
+  console.groupCollapsed("[ScheduleAI] Chat API result");
+  console.info("intent", result.intent);
+  console.info("mode", result.mode);
+  console.info("reply", result.reply);
+  console.info("scheduleRequest", result.scheduleRequest);
+  console.info("calendarAvailability", result.calendarAvailability);
+  console.info("candidates", result.candidates);
+  console.groupEnd();
 }
 
 function convertMeetingRequestToParsed(request: MeetingRequest): ParsedRequest {

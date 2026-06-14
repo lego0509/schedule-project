@@ -103,15 +103,28 @@ export async function POST(request: Request) {
 
   if (!env.openaiApiKey) {
     const output = createMockResponse(parsed.data.message, parsed.data.resolvedParticipants);
+    const result = withProgrammaticScheduleResult(output);
+    logChatPipeline("mock_response", {
+      intent: result.intent,
+      hasScheduleRequest: Boolean(result.scheduleRequest),
+      candidateCount: result.candidates.length,
+    });
+
     return NextResponse.json({
       mode: "mock",
-      ...withProgrammaticScheduleResult(output),
+      ...result,
     });
   }
 
   try {
     const maskContext = createParticipantMaskContext(parsed.data.resolvedParticipants);
     const maskedMessage = maskParticipantText(parsed.data.message, maskContext);
+    logChatPipeline("masking", {
+      participantCount: maskContext.masks.length,
+      maskedMessage,
+      maskedParticipants: maskContext.maskedParticipants,
+    });
+
     const client = new OpenAI({ apiKey: env.openaiApiKey });
     const response = await client.responses.parse({
       model: env.openaiModel,
@@ -152,10 +165,21 @@ export async function POST(request: Request) {
     }
 
     const restoredOutput = restoreOpenAiOutput(output, maskContext);
+    logChatPipeline("openai_response", {
+      intent: restoredOutput.intent,
+      hasScheduleRequest: Boolean(restoredOutput.scheduleRequest),
+      scheduleRequest: toMaskedScheduleRequestForLog(output, maskContext),
+    });
+
+    const result = withProgrammaticScheduleResult(restoredOutput);
+    logChatPipeline("openai_result", {
+      intent: result.intent,
+      candidateCount: result.candidates.length,
+    });
 
     return NextResponse.json({
       mode: "openai",
-      ...withProgrammaticScheduleResult(restoredOutput),
+      ...result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "OpenAI request failed";
@@ -193,6 +217,27 @@ function restoreOpenAiOutput(
   };
 }
 
+function logChatPipeline(event: string, details: Record<string, unknown>) {
+  console.info(`[ScheduleAI] ${event}`, details);
+}
+
+function toMaskedScheduleRequestForLog(
+  output: ChatResponse,
+  maskContext: ReturnType<typeof createParticipantMaskContext>
+) {
+  if (output.intent !== "schedule_request" || !output.scheduleRequest) {
+    return null;
+  }
+
+  return {
+    ...output.scheduleRequest,
+    participants: output.scheduleRequest.participants.map((participant, index) => ({
+      alias: maskContext.masks[index]?.alias ?? `participant-${index + 1}`,
+      required: participant.required,
+    })),
+  };
+}
+
 function withProgrammaticScheduleResult(output: ChatResponse) {
   if (output.intent !== "schedule_request" || !output.scheduleRequest) {
     return {
@@ -204,6 +249,18 @@ function withProgrammaticScheduleResult(output: ChatResponse) {
 
   const calendarAvailability = buildAllFreeAvailability(output.scheduleRequest);
   const candidates = calculateMeetingCandidates(output.scheduleRequest, calendarAvailability);
+  logChatPipeline("candidate_calculation", {
+    provider: calendarAvailability.provider,
+    participantCount: calendarAvailability.participants.length,
+    assumptions: calendarAvailability.assumptions,
+    candidates: candidates.map((candidate) => ({
+      id: candidate.id,
+      startAt: candidate.startAt,
+      endAt: candidate.endAt,
+      score: candidate.score,
+      tags: candidate.tags,
+    })),
+  });
 
   return {
     ...output,

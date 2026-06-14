@@ -19,18 +19,7 @@ export type ParticipantMaskContext = {
   maskedParticipants: MaskedParticipant[];
 };
 
-const ALIAS_NAMES = [
-  "Aさん",
-  "Bさん",
-  "Cさん",
-  "Dさん",
-  "Eさん",
-  "Fさん",
-  "Gさん",
-  "Hさん",
-  "Iさん",
-  "Jさん",
-];
+const ALIAS_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 export function createParticipantMaskContext(participants: Participant[]): ParticipantMaskContext {
   const masks = participants.map((participant, index) => ({
@@ -71,5 +60,6 @@ export function restoreParticipants(context: ParticipantMaskContext) {
 }
 
 function toAlias(index: number) {
-  return `｛${ALIAS_NAMES[index] ?? `参加者${index + 1}`}｝`;
+  const label = ALIAS_LABELS[index] ?? `participant${index + 1}`;
+  return `\uFF5B${label}\u3055\u3093\uFF5D`;
 }
