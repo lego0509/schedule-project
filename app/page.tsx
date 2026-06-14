@@ -150,6 +150,7 @@ export default function Home() {
   const [mobilePanel, setMobilePanel] = useState<"chat" | "insights">("chat");
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selected, setSelected] = useState<Contact[]>([]);
@@ -193,6 +194,10 @@ export default function Home() {
       resizeComposerTextarea(inputRef.current);
     }
   }, [input]);
+
+  useEffect(() => {
+    scrollMessagesToBottom(messagesRef.current);
+  }, [messages.length, isSending, mobilePanel]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -519,7 +524,7 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="messages" aria-live="polite">
+          <div className="messages" ref={messagesRef} aria-live="polite">
             {messages.map((message, index) => (
               <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
                 <div className="avatar">{message.role === "user" ? "You" : "AI"}</div>
@@ -528,6 +533,18 @@ export default function Home() {
                 </div>
               </article>
             ))}
+            {isSending ? (
+              <article className="message assistant typing" aria-label="AIが入力中です">
+                <div className="avatar">AI</div>
+                <div className="bubble">
+                  <div className="typing-dots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+              </article>
+            ) : null}
           </div>
 
           <form className="composer" onSubmit={handleSubmit}>
@@ -706,6 +723,19 @@ function resizeComposerTextarea(textarea: HTMLTextAreaElement) {
 
   const maxHeight = Number.parseFloat(window.getComputedStyle(textarea).maxHeight);
   textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function scrollMessagesToBottom(container: HTMLDivElement | null) {
+  if (!container) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
+  });
 }
 
 function convertMeetingRequestToParsed(request: MeetingRequest): ParsedRequest {
