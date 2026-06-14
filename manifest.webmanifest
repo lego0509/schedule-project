@@ -1,0 +1,19 @@
+{
+  "name": "Schedule AI",
+  "short_name": "Schedule AI",
+  "description": "仕事とプライベートの予定を考慮して会議候補日を提案するAIスケジューラー",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef7f5",
+  "theme_color": "#0f766e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
