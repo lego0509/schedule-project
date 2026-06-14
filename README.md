@@ -15,18 +15,19 @@
 ## Local Preview
 
 ```bash
-python -m http.server 4174 --bind 127.0.0.1
+npm install
+npm run dev
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:4174/index.html
+http://127.0.0.1:3000
 ```
 
 ## Deployment
 
-This repository can be deployed to Vercel as a static site. No build command is required for the current prototype.
+This repository can be deployed to Vercel as a Next.js app.
 
 Later phases will replace the current mock login and mock participant search with:
 

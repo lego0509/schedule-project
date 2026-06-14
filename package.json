@@ -1,0 +1,36 @@
+{
+  "name": "schedule-project",
+  "version": "1.0.0",
+  "description": "Schedule AI UI prototype",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lego0509/schedule-project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lego0509/schedule-project/issues"
+  },
+  "homepage": "https://github.com/lego0509/schedule-project#readme",
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "next": "^16.2.9",
+    "openai": "^6.42.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.3",
+    "@types/react": "19.2.17",
+    "typescript": "6.0.3"
+  }
+}
