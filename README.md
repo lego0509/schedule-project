@@ -36,6 +36,36 @@ OpenAI is optional in local development. If `OPENAI_API_KEY` is not set, `/api/c
 ```text
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.1
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+## Microsoft Login
+
+This prototype uses Supabase Auth with the Azure OAuth provider.
+
+Required setup:
+
+1. Create a Supabase project and set `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+2. In Microsoft Entra ID, create an app registration.
+3. Set supported account types to allow personal Microsoft accounts.
+4. Add this redirect URI to the Microsoft app:
+
+```text
+https://<supabase-project-ref>.supabase.co/auth/v1/callback
+```
+
+5. In Supabase Auth Providers, enable Azure and set the Microsoft client ID and secret.
+6. Add the app URL to Supabase Auth URL configuration. For local development:
+
+```text
+http://localhost:3000/auth/callback
+```
+
+For Vercel:
+
+```text
+https://<vercel-domain>/auth/callback
 ```
 
 The chat API classifies input into:

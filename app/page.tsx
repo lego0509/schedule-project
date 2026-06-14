@@ -1,9 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import type { ChatResponse } from "@/lib/chat-schema";
 import type { MeetingRequest } from "@/lib/meeting-schema";
 import type { CalendarAvailability, MeetingCandidate } from "@/lib/scheduler";
+import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase-browser";
 
 type Role = "利用者" | "管理者";
 
@@ -138,8 +140,13 @@ const quickPrompts = [
   },
 ];
 
+const loginRoleStorageKey = "schedule-ai-login-role";
+
 export default function Home() {
   const [role, setRole] = useState<Role | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"chat" | "insights">("chat");
   const [input, setInput] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -180,6 +187,85 @@ export default function Home() {
     ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
     : "未選択";
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      const sessionUser = data.session?.user ?? null;
+      setAuthUser(sessionUser);
+
+      if (sessionUser) {
+        const storedRole = window.sessionStorage.getItem(loginRoleStorageKey) as Role | null;
+        setRole(storedRole ?? "利用者");
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user ?? null;
+      setAuthUser(sessionUser);
+
+      if (sessionUser) {
+        const storedRole = window.sessionStorage.getItem(loginRoleStorageKey) as Role | null;
+        setRole(storedRole ?? "利用者");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleMicrosoftSignIn(nextRole: Role) {
+    setAuthError(null);
+
+    if (!isSupabaseConfigured) {
+      setAuthError("Supabaseの環境変数が未設定です。NEXT_PUBLIC_SUPABASE_URLとNEXT_PUBLIC_SUPABASE_ANON_KEYを設定してください。");
+      return;
+    }
+
+    setAuthLoading(true);
+    window.sessionStorage.setItem(loginRoleStorageKey, nextRole);
+
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: "openid email profile offline_access",
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+
+    if (error) {
+      setAuthError(error.message);
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (isSupabaseConfigured) {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    }
+
+    window.sessionStorage.removeItem(loginRoleStorageKey);
+    setAuthUser(null);
+    setRole(null);
+  }
+
   if (!role) {
     return (
       <section className="login-screen" aria-label="ログイン">
@@ -192,6 +278,12 @@ export default function Home() {
           <p>
             Microsoftアカウントでログインし、チャットから参加者と条件を指定して会議候補を作成します。
           </p>
+          <p className={`auth-message ${authError ? "is-error" : ""}`}>
+            {authError ??
+              (isSupabaseConfigured
+                ? "個人Microsoftアカウントでログインできます。"
+                : "Supabase環境変数を設定するとMicrosoftログインを試せます。")}
+          </p>
         </div>
 
         <div className="login-grid">
@@ -199,16 +291,26 @@ export default function Home() {
             <span className="role-label">利用者用</span>
             <h2>会議候補を作成</h2>
             <p>参加者をメンションで指定し、空き時間候補を確認します。</p>
-            <button className="primary-button" type="button" onClick={() => setRole("利用者")}>
-              Microsoftでログイン
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => handleMicrosoftSignIn("利用者")}
+              disabled={authLoading}
+            >
+              {authLoading ? "ログイン処理中" : "Microsoftでログイン"}
             </button>
           </article>
           <article className="login-card admin">
             <span className="role-label">管理者用</span>
             <h2>利用設定を管理</h2>
             <p>連携設定、ユーザー設定、候補算出ルールの管理画面に入ります。</p>
-            <button className="secondary-button" type="button" onClick={() => setRole("管理者")}>
-              管理者としてログイン
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => handleMicrosoftSignIn("管理者")}
+              disabled={authLoading}
+            >
+              {authLoading ? "ログイン処理中" : "管理者としてログイン"}
             </button>
           </article>
         </div>
@@ -331,12 +433,13 @@ export default function Home() {
         </div>
         <div className="topbar-actions">
           <span className="role-chip">{role}</span>
+          {authUser?.email ? <span className="role-chip">{authUser.email}</span> : null}
           {role === "管理者" ? (
             <button className="ghost-button" type="button">
               管理
             </button>
           ) : null}
-          <button className="ghost-button" type="button" onClick={() => setRole(null)}>
+          <button className="ghost-button" type="button" onClick={handleSignOut}>
             ログアウト
           </button>
         </div>
