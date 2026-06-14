@@ -1,0 +1,14 @@
+image: node:22-alpine
+
+stages:
+  - deploy
+
+deploy_production:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - npx vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+  environment:
+    name: production
+    url: $VERCEL_PROJECT_PRODUCTION_URL

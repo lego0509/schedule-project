@@ -28,6 +28,19 @@ http://127.0.0.1:4174/index.html
 
 This repository can be deployed to Vercel as a static site. No build command is required for the current prototype.
 
+### GitLab CI to Vercel
+
+Vercel's GitLab integration may require a paid plan. If it is unavailable, deploy through GitLab CI with Vercel CLI instead.
+
+Set these GitLab CI/CD variables:
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+- `VERCEL_PROJECT_PRODUCTION_URL`
+
+The pipeline in `.gitlab-ci.yml` deploys the `main` branch to production.
+
 Later phases will replace the current mock login and mock participant search with:
 
 - Supabase Auth
