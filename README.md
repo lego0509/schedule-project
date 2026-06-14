@@ -35,7 +35,7 @@ OpenAI is optional in local development. If `OPENAI_API_KEY` is not set, `/api/c
 
 ```text
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.1-mini
+OPENAI_MODEL=gpt-5.1
 ```
 
 The chat API classifies input into:
