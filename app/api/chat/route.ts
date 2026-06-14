@@ -5,6 +5,7 @@ import { z } from "zod";
 import { chatResponseSchema, type ChatResponse } from "@/lib/chat-schema";
 import { env } from "@/lib/env";
 import { meetingRequestSchema } from "@/lib/meeting-schema";
+import { buildAllFreeAvailability, calculateMeetingCandidates } from "@/lib/scheduler";
 
 const requestSchema = z.object({
   message: z.string().min(1),
@@ -95,9 +96,10 @@ export async function POST(request: Request) {
   }
 
   if (!env.openaiApiKey) {
+    const output = createMockResponse(parsed.data.message, parsed.data.resolvedParticipants);
     return NextResponse.json({
       mode: "mock",
-      ...createMockResponse(parsed.data.message, parsed.data.resolvedParticipants),
+      ...withProgrammaticScheduleResult(output),
     });
   }
 
@@ -141,10 +143,30 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       mode: "openai",
-      ...output,
+      ...withProgrammaticScheduleResult(output),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "OpenAI request failed";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+}
+
+function withProgrammaticScheduleResult(output: ChatResponse) {
+  if (output.intent !== "schedule_request" || !output.scheduleRequest) {
+    return {
+      ...output,
+      calendarAvailability: null,
+      candidates: [],
+    };
+  }
+
+  const calendarAvailability = buildAllFreeAvailability(output.scheduleRequest);
+  const candidates = calculateMeetingCandidates(output.scheduleRequest, calendarAvailability);
+
+  return {
+    ...output,
+    reply: `${output.reply} 全員が空いている仮データで候補を${candidates.length}件算出しました。`,
+    calendarAvailability,
+    candidates,
+  };
 }

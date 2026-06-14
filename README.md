@@ -45,6 +45,17 @@ The chat API classifies input into:
 
 For `schedule_request`, it returns a structured `scheduleRequest` JSON object that can later be passed to calendar providers.
 
+The current prototype also includes a programmatic candidate calculation flow:
+
+```text
+OpenAI structured scheduleRequest
+-> outlook_mock_all_free availability JSON
+-> calculateMeetingCandidates()
+-> 3 candidate slots
+```
+
+Candidate calculation does not use AI. AI is only used to classify the message and convert the user's request into JSON.
+
 Later phases will replace the current mock login and mock participant search with:
 
 - Supabase Auth

@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import type { ChatResponse } from "@/lib/chat-schema";
 import type { MeetingRequest } from "@/lib/meeting-schema";
+import type { CalendarAvailability, MeetingCandidate } from "@/lib/scheduler";
 
 type Role = "利用者" | "管理者";
 
@@ -21,6 +22,8 @@ type Message = {
 
 type ChatApiResponse = ChatResponse & {
   mode: "mock" | "openai";
+  calendarAvailability: CalendarAvailability | null;
+  candidates: MeetingCandidate[];
 };
 
 type Candidate = {
@@ -156,6 +159,7 @@ export default function Home() {
     },
   ]);
   const [lastAiResult, setLastAiResult] = useState<ChatApiResponse | null>(null);
+  const [candidateCards, setCandidateCards] = useState<Candidate[]>(mockCandidates.slice(0, 3));
 
   const mentionQuery = useMemo(() => {
     const match = input.match(/@([^\s@]*)$/);
@@ -173,7 +177,6 @@ export default function Home() {
     });
   }, [mentionQuery]);
 
-  const candidates = mockCandidates.slice(0, parsed.count);
   const participantLabel = selected.length
     ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
     : "未選択";
@@ -295,7 +298,13 @@ export default function Home() {
       setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
 
       if (result.intent === "schedule_request" && result.scheduleRequest) {
-        setParsed(convertMeetingRequestToParsed(result.scheduleRequest));
+        setParsed({
+          ...convertMeetingRequestToParsed(result.scheduleRequest),
+          count: result.candidates.length,
+        });
+        if (result.candidates.length) {
+          setCandidateCards(result.candidates.map(convertCandidateToCard));
+        }
         setMobilePanel("insights");
       } else {
         setMobilePanel("chat");
@@ -491,6 +500,8 @@ export default function Home() {
                         intent: lastAiResult.intent,
                         reply: lastAiResult.reply,
                         scheduleRequest: lastAiResult.scheduleRequest,
+                        calendarAvailability: lastAiResult.calendarAvailability,
+                        candidates: lastAiResult.candidates,
                       },
                       null,
                       2
@@ -502,10 +513,10 @@ export default function Home() {
             <section className="candidate-section">
               <div className="section-heading">
                 <h2>候補日</h2>
-                <span>{candidates.length}件</span>
+                <span>{candidateCards.length}件</span>
               </div>
               <div className="candidate-list">
-                {candidates.map((candidate) => (
+                {candidateCards.map((candidate) => (
                   <article className={`candidate-card ${candidate.variant ?? ""}`} key={candidate.time}>
                     <div className="candidate-top">
                       <div>
@@ -607,4 +618,15 @@ function convertTimeOfDayLabel(type: MeetingRequest["timeOfDay"]) {
   } satisfies Record<MeetingRequest["timeOfDay"], string>;
 
   return labels[type];
+}
+
+function convertCandidateToCard(candidate: MeetingCandidate, index: number): Candidate {
+  return {
+    date: candidate.dateLabel,
+    time: candidate.timeLabel,
+    score: index === 0 ? "最適" : `${candidate.score}%`,
+    reason: candidate.reason,
+    tags: candidate.tags,
+    variant: index === 0 ? "best" : undefined,
+  };
 }
