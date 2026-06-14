@@ -456,6 +456,7 @@ button {
 .composer {
   position: relative;
   display: grid;
+  align-items: end;
   grid-template-columns: 1fr auto;
   gap: 10px;
   padding: 12px;
@@ -465,13 +466,15 @@ button {
 
 .composer textarea {
   width: 100%;
-  max-height: 112px;
-  min-height: 46px;
+  max-height: 156px;
+  min-height: 68px;
   resize: none;
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px 13px;
   outline: none;
+  line-height: 1.45;
+  overflow-y: hidden;
 }
 
 .composer textarea:focus {
@@ -480,7 +483,9 @@ button {
 }
 
 .composer button[type="submit"] {
+  align-self: end;
   min-width: 76px;
+  min-height: 46px;
   padding: 0 18px;
   background: var(--primary);
   color: #fff;
@@ -890,7 +895,8 @@ button {
   }
 
   .composer textarea {
-    max-height: 88px;
+    max-height: 132px;
+    min-height: 66px;
   }
 
   .condition-grid {

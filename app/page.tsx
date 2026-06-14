@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { ChatResponse } from "@/lib/chat-schema";
 import type { MeetingRequest } from "@/lib/meeting-schema";
@@ -149,6 +149,7 @@ export default function Home() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"chat" | "insights">("chat");
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selected, setSelected] = useState<Contact[]>([]);
@@ -186,6 +187,12 @@ export default function Home() {
   const participantLabel = selected.length
     ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
     : "未選択";
+
+  useEffect(() => {
+    if (inputRef.current) {
+      resizeComposerTextarea(inputRef.current);
+    }
+  }, [input]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -550,13 +557,16 @@ export default function Home() {
               依頼内容
             </label>
             <textarea
+              ref={inputRef}
               id="chat-input"
-              rows={1}
+              rows={2}
               placeholder="例: @山田 と @佐藤 の1時間会議を今週中で"
               value={input}
               onChange={(event) => {
-                setInput(event.target.value);
-                setMentionOpen(/@[^\s@]*$/.test(event.target.value));
+                const nextInput = event.target.value;
+                setInput(nextInput);
+                resizeComposerTextarea(event.currentTarget);
+                setMentionOpen(/@[^\s@]*$/.test(nextInput));
               }}
               onFocus={() => {
                 if (/@[^\s@]*$/.test(input)) {
@@ -688,6 +698,14 @@ function logChatApiResult(result: ChatApiResponse) {
   console.info("calendarAvailability", result.calendarAvailability);
   console.info("candidates", result.candidates);
   console.groupEnd();
+}
+
+function resizeComposerTextarea(textarea: HTMLTextAreaElement) {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+
+  const maxHeight = Number.parseFloat(window.getComputedStyle(textarea).maxHeight);
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function convertMeetingRequestToParsed(request: MeetingRequest): ParsedRequest {
