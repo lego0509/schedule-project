@@ -361,7 +361,8 @@ button {
 }
 
 .add-participant,
-.participant-chip {
+.participant-chip,
+.participant-more {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -370,19 +371,30 @@ button {
 }
 
 .add-participant {
+  position: sticky;
+  left: 0;
+  z-index: 2;
   padding: 0 12px;
   background: var(--primary);
   color: #fff;
   font-weight: 800;
+  box-shadow: 8px 0 14px rgba(255, 255, 255, 0.94);
 }
 
-.participant-chip {
+.participant-chip,
+.participant-more {
   gap: 8px;
   padding: 0 6px 0 12px;
   background: var(--primary-soft);
   color: var(--primary-dark);
   font-size: 0.9rem;
   font-weight: 800;
+}
+
+.participant-more {
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  padding: 0 12px;
+  background: #fff;
 }
 
 .participant-chip small {

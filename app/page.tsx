@@ -80,6 +80,27 @@ const contacts: Contact[] = [
     department: "デザイン部",
     jobTitle: "デザイナー",
   },
+  {
+    id: "user-006",
+    displayName: "田中 美咲",
+    email: "misaki.tanaka@example.com",
+    department: "マーケティング部",
+    jobTitle: "プランナー",
+  },
+  {
+    id: "user-007",
+    displayName: "伊藤 誠",
+    email: "makoto.ito@example.com",
+    department: "経理部",
+    jobTitle: "主任",
+  },
+  {
+    id: "user-008",
+    displayName: "渡辺 優",
+    email: "yu.watanabe@example.com",
+    department: "カスタマーサクセス",
+    jobTitle: "担当",
+  },
 ];
 
 const mockCandidates: Candidate[] = [
@@ -141,6 +162,7 @@ const quickPrompts = [
 ];
 
 const loginRoleStorageKey = "schedule-ai-login-role";
+const visibleParticipantLimit = 6;
 
 export default function Home() {
   const [role, setRole] = useState<Role | null>(null);
@@ -152,6 +174,7 @@ export default function Home() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [participantsExpanded, setParticipantsExpanded] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [selected, setSelected] = useState<Contact[]>([]);
   const [parsed, setParsed] = useState<ParsedRequest>({
@@ -188,6 +211,8 @@ export default function Home() {
   const participantLabel = selected.length
     ? selected.map((contact) => `${contact.displayName}（${contact.department}）`).join("、")
     : "未選択";
+  const overflowParticipantCount = Math.max(selected.length - visibleParticipantLimit, 0);
+  const visibleParticipants = participantsExpanded ? selected : selected.slice(0, visibleParticipantLimit);
 
   useEffect(() => {
     if (inputRef.current) {
@@ -349,6 +374,7 @@ export default function Home() {
     const additions = ids
       .map((id) => contacts.find((contact) => contact.id === id))
       .filter((contact): contact is Contact => Boolean(contact));
+    setParticipantsExpanded(false);
     setSelected((current) => {
       const next = [...current];
       additions.forEach((contact) => {
@@ -367,12 +393,19 @@ export default function Home() {
       }
       return [...current, contact];
     });
+    setParticipantsExpanded(false);
     setInput((current) => current.replace(/@[^\s@]*$/, `@${contact.displayName} `));
     setMentionOpen(false);
   }
 
   function removeContact(id: string) {
-    setSelected((current) => current.filter((contact) => contact.id !== id));
+    setSelected((current) => {
+      const next = current.filter((contact) => contact.id !== id);
+      if (next.length <= visibleParticipantLimit) {
+        setParticipantsExpanded(false);
+      }
+      return next;
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -506,7 +539,10 @@ export default function Home() {
           </div>
 
           <div className="selected-participants" aria-label="選択済み参加者">
-            {selected.map((contact) => (
+            <button className="add-participant" type="button" onClick={() => setMentionOpen(true)}>
+              参加者を追加
+            </button>
+            {visibleParticipants.map((contact) => (
               <span className="participant-chip" key={contact.id}>
                 {contact.displayName}
                 <small>{contact.department}</small>
@@ -519,9 +555,16 @@ export default function Home() {
                 </button>
               </span>
             ))}
-            <button className="add-participant" type="button" onClick={() => setMentionOpen(true)}>
-              参加者を追加
-            </button>
+            {overflowParticipantCount ? (
+              <button
+                className="participant-more"
+                type="button"
+                onClick={() => setParticipantsExpanded((current) => !current)}
+                aria-expanded={participantsExpanded}
+              >
+                {participantsExpanded ? "まとめる" : `他${overflowParticipantCount}人`}
+              </button>
+            ) : null}
           </div>
 
           <div className="messages" ref={messagesRef} aria-live="polite">
