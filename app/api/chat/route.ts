@@ -5,6 +5,12 @@ import { z } from "zod";
 import { chatResponseSchema, type ChatResponse } from "@/lib/chat-schema";
 import { env } from "@/lib/env";
 import { meetingRequestSchema } from "@/lib/meeting-schema";
+import {
+  createParticipantMaskContext,
+  maskParticipantText,
+  restoreParticipants,
+  unmaskParticipantText,
+} from "@/lib/privacy-mask";
 import { buildAllFreeAvailability, calculateMeetingCandidates } from "@/lib/scheduler";
 
 const requestSchema = z.object({
@@ -104,6 +110,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    const maskContext = createParticipantMaskContext(parsed.data.resolvedParticipants);
+    const maskedMessage = maskParticipantText(parsed.data.message, maskContext);
     const client = new OpenAI({ apiKey: env.openaiApiKey });
     const response = await client.responses.parse({
       model: env.openaiModel,
@@ -115,8 +123,10 @@ export async function POST(request: Request) {
             "ユーザー入力を small_talk または schedule_request に分類してください。",
             "small_talk は雑談、挨拶、使い方質問、日程調整と無関係な会話です。この場合 scheduleRequest は null にしてください。",
             "schedule_request は会議候補、空き時間、日程調整、予定確認に関する依頼です。この場合 scheduleRequest を必ず埋めてください。",
-            "参加者は resolvedParticipants を正として扱い、本文中の名前から勝手に同姓同名を推測しないでください。",
-            "resolvedParticipants が空で参加者が必要な依頼なら、participants は空配列のままにし、reply でメンション選択を促してください。",
+            "参加者情報はプライバシー保護のため匿名化されています。",
+            "maskedParticipants を正として扱い、本文中の名前から勝手に同姓同名を推測しないでください。",
+            "参加者を返す場合、displayName には必ず maskedParticipants の alias をそのまま入れてください。email と id は null にしてください。",
+            "maskedParticipants が空で参加者が必要な依頼なら、participants は空配列のままにし、reply でメンション選択を促してください。",
             "日付が不明な場合は dateRange.type を unspecified にしてください。",
             "候補件数は3から5に丸めてください。",
             "reply は日本語で、ユーザーにそのまま返せる短い文章にしてください。",
@@ -125,9 +135,9 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: JSON.stringify({
-            currentMessage: parsed.data.message,
-            resolvedParticipants: parsed.data.resolvedParticipants,
-            recentHistory: parsed.data.history.slice(-8),
+            currentMessage: maskedMessage,
+            maskedParticipants: maskContext.maskedParticipants,
+            recentHistory: [],
           }),
         },
       ],
@@ -141,14 +151,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to parse OpenAI response" }, { status: 502 });
     }
 
+    const restoredOutput = restoreOpenAiOutput(output, maskContext);
+
     return NextResponse.json({
       mode: "openai",
-      ...withProgrammaticScheduleResult(output),
+      ...withProgrammaticScheduleResult(restoredOutput),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "OpenAI request failed";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+}
+
+function restoreOpenAiOutput(
+  output: ChatResponse,
+  maskContext: ReturnType<typeof createParticipantMaskContext>
+): ChatResponse {
+  const restoredReply = unmaskParticipantText(output.reply, maskContext);
+
+  if (output.intent !== "schedule_request" || !output.scheduleRequest) {
+    return {
+      ...output,
+      reply: restoredReply,
+    };
+  }
+
+  const restoredParticipants = maskContext.masks.length
+    ? restoreParticipants(maskContext)
+    : output.scheduleRequest.participants.map((participant) => ({
+        ...participant,
+        displayName: unmaskParticipantText(participant.displayName, maskContext),
+      }));
+
+  return {
+    ...output,
+    reply: restoredReply,
+    scheduleRequest: {
+      ...output.scheduleRequest,
+      participants: restoredParticipants,
+    },
+  };
 }
 
 function withProgrammaticScheduleResult(output: ChatResponse) {

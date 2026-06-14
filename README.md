@@ -56,6 +56,15 @@ OpenAI structured scheduleRequest
 
 Candidate calculation does not use AI. AI is only used to classify the message and convert the user's request into JSON.
 
+Mentioned participant names are masked before calling OpenAI:
+
+```text
+@山田 太郎 -> ｛Aさん｝
+@佐藤 花子 -> ｛Bさん｝
+```
+
+The server restores the original participant names after receiving the structured response. OpenAI does not receive selected participant names, emails, or IDs.
+
 Later phases will replace the current mock login and mock participant search with:
 
 - Supabase Auth
