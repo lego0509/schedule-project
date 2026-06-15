@@ -287,6 +287,7 @@ button {
 }
 
 .chat-header,
+.connection-section,
 .summary-section,
 .candidate-section,
 .calendar-preview {
@@ -621,12 +622,83 @@ button {
 }
 
 .summary-section,
+.connection-section,
 .candidate-section,
 .calendar-preview {
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px;
   box-shadow: var(--shadow);
+}
+
+.connection-list {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.connection-row strong,
+.connection-row p {
+  margin: 0;
+}
+
+.connection-row p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.connection-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.connection-badge.is-connected {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+}
+
+.connect-calendar-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 900;
+}
+
+.connect-calendar-button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.connection-error {
+  margin: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fef2f2;
+  color: #b42318;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .section-heading {
@@ -858,6 +930,7 @@ button {
   }
 
   .summary-section,
+  .connection-section,
   .candidate-section,
   .calendar-preview {
     box-shadow: none;
@@ -933,6 +1006,7 @@ button {
 
   .chat-panel,
   .summary-section,
+  .connection-section,
   .candidate-section,
   .calendar-preview {
     border-right: 0;
@@ -981,6 +1055,11 @@ button {
 
   .candidate-card h3 {
     font-size: 1.08rem;
+  }
+
+  .connection-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .mention-item {

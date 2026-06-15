@@ -129,6 +129,10 @@ export default function Home() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [googleCalendarEmail, setGoogleCalendarEmail] = useState<string | null>(null);
+  const [googleCalendarLoading, setGoogleCalendarLoading] = useState(false);
+  const [googleCalendarError, setGoogleCalendarError] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<"chat" | "insights">("chat");
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -210,6 +214,7 @@ export default function Home() {
       if (sessionUser) {
         const storedRole = window.sessionStorage.getItem(loginRoleStorageKey) as Role | null;
         setRole(storedRole ?? "利用者");
+        refreshGoogleCalendarConnection();
       }
     });
 
@@ -222,6 +227,10 @@ export default function Home() {
       if (sessionUser) {
         const storedRole = window.sessionStorage.getItem(loginRoleStorageKey) as Role | null;
         setRole(storedRole ?? "利用者");
+        refreshGoogleCalendarConnection();
+      } else {
+        setGoogleCalendarConnected(false);
+        setGoogleCalendarEmail(null);
       }
     });
 
@@ -267,14 +276,81 @@ export default function Home() {
 
     window.sessionStorage.removeItem(loginRoleStorageKey);
     setAuthUser(null);
+    setGoogleCalendarConnected(false);
+    setGoogleCalendarEmail(null);
     setRole(null);
   }
 
   function handleSkipLogin() {
     setAuthError(null);
     setAuthUser(null);
+    setGoogleCalendarConnected(false);
+    setGoogleCalendarEmail(null);
     window.sessionStorage.setItem(loginRoleStorageKey, "利用者");
     setRole("利用者");
+  }
+
+  async function refreshGoogleCalendarConnection() {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.getUserIdentities();
+
+    if (error) {
+      setGoogleCalendarError(error.message);
+      return;
+    }
+
+    const googleIdentity = data.identities.find((identity) => identity.provider === "google");
+    const googleIdentityData = googleIdentity?.identity_data as { email?: unknown } | undefined;
+    const googleEmail = typeof googleIdentityData?.email === "string" ? googleIdentityData.email : null;
+
+    setGoogleCalendarConnected(Boolean(googleIdentity));
+    setGoogleCalendarEmail(googleEmail);
+  }
+
+  async function handleGoogleCalendarConnect() {
+    setGoogleCalendarError(null);
+
+    if (!isSupabaseConfigured) {
+      setGoogleCalendarError("Supabaseの環境変数が未設定です。");
+      return;
+    }
+
+    if (!authUser) {
+      setGoogleCalendarError("Google Calendar連携にはMicrosoftログインが必要です。");
+      return;
+    }
+
+    setGoogleCalendarLoading(true);
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes:
+          "openid email profile https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+
+    if (error) {
+      setGoogleCalendarError(error.message);
+      setGoogleCalendarLoading(false);
+      return;
+    }
+
+    if (data.url) {
+      window.location.href = data.url;
+      return;
+    }
+
+    setGoogleCalendarLoading(false);
   }
 
   if (!role) {
@@ -614,6 +690,43 @@ export default function Home() {
           aria-label="候補日と条件"
         >
           <div className="insight-scroll">
+            <section className="connection-section">
+              <div className="section-heading">
+                <h2>カレンダー連携</h2>
+                <span>{googleCalendarConnected ? "Google接続済み" : "Google未接続"}</span>
+              </div>
+              <div className="connection-list">
+                <div className="connection-row">
+                  <div>
+                    <strong>Outlook</strong>
+                    <p>{authUser?.email ? `${authUser.email} でログイン中` : "Microsoftログイン未接続"}</p>
+                  </div>
+                  <span className={`connection-badge ${authUser ? "is-connected" : ""}`}>
+                    {authUser ? "接続済み" : "未接続"}
+                  </span>
+                </div>
+                <div className="connection-row">
+                  <div>
+                    <strong>Google Calendar</strong>
+                    <p>
+                      {googleCalendarConnected
+                        ? `${googleCalendarEmail ?? "Googleアカウント"} の空き時間確認を許可済み`
+                        : "プライベート予定の衝突確認には連携が必要です"}
+                    </p>
+                  </div>
+                  <button
+                    className="connect-calendar-button"
+                    type="button"
+                    onClick={handleGoogleCalendarConnect}
+                    disabled={googleCalendarLoading || googleCalendarConnected}
+                  >
+                    {googleCalendarConnected ? "接続済み" : googleCalendarLoading ? "接続中" : "Google連携"}
+                  </button>
+                </div>
+                {googleCalendarError ? <p className="connection-error">{googleCalendarError}</p> : null}
+              </div>
+            </section>
+
             <section className="summary-section">
               <div className="section-heading">
                 <h2>抽出された条件</h2>

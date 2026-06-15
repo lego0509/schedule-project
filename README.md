@@ -68,6 +68,39 @@ For Vercel:
 https://<vercel-domain>/auth/callback
 ```
 
+## Google Calendar Connection
+
+The app login remains Microsoft. Google is linked as an additional identity for private calendar access.
+
+Required setup:
+
+1. In Google Cloud Console, enable the Google Calendar API.
+2. Configure Google OAuth consent and add these scopes:
+
+```text
+openid
+email
+profile
+https://www.googleapis.com/auth/calendar.freebusy
+https://www.googleapis.com/auth/calendar.calendarlist.readonly
+```
+
+3. Create a Web OAuth client.
+4. Add the Supabase Google callback URL to Google Authorized redirect URIs:
+
+```text
+https://<supabase-project-ref>.supabase.co/auth/v1/callback
+```
+
+5. In Supabase Auth Providers, enable Google and set the Google client ID and secret.
+6. Add the app callback URL to Supabase Auth URL configuration:
+
+```text
+https://<vercel-domain>/auth/callback
+```
+
+The current implementation links the Google identity to the signed-in Microsoft user. Calendar free/busy fetching and token persistence will be added after the database connection schema is created.
+
 The chat API classifies input into:
 
 - `small_talk`
