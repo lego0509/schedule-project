@@ -103,46 +103,6 @@ const contacts: Contact[] = [
   },
 ];
 
-const mockCandidates: Candidate[] = [
-  {
-    date: "6月16日 火",
-    time: "09:30 - 10:30",
-    score: "最適",
-    reason: "選択済み参加者全員が空いており、直前後の予定にも余裕があります。",
-    tags: ["衝突なし", "移動不要", "午前"],
-    variant: "best",
-  },
-  {
-    date: "6月17日 水",
-    time: "10:00 - 11:00",
-    score: "92%",
-    reason: "既存予定との間隔が十分あり、昼休みに重なりません。",
-    tags: ["衝突なし", "昼休み回避"],
-  },
-  {
-    date: "6月18日 木",
-    time: "09:00 - 10:00",
-    score: "88%",
-    reason: "午後の予定を避け、午前の空き枠を優先しました。",
-    tags: ["午前", "平日"],
-  },
-  {
-    date: "6月19日 金",
-    time: "11:00 - 12:00",
-    score: "候補",
-    reason: "会議後すぐ昼休みのため、余裕は少なめです。",
-    tags: ["衝突なし", "余裕少"],
-    variant: "warning",
-  },
-  {
-    date: "6月22日 月",
-    time: "15:00 - 16:00",
-    score: "84%",
-    reason: "来週の中では参加者の空きが揃いやすい枠です。",
-    tags: ["来週", "衝突なし"],
-  },
-];
-
 const quickPrompts = [
   {
     label: "今週中・午前・60分",
@@ -190,7 +150,7 @@ export default function Home() {
     },
   ]);
   const [lastAiResult, setLastAiResult] = useState<ChatApiResponse | null>(null);
-  const [candidateCards, setCandidateCards] = useState<Candidate[]>(mockCandidates.slice(0, 3));
+  const [candidateCards, setCandidateCards] = useState<Candidate[]>([]);
 
   const mentionQuery = useMemo(() => {
     const match = input.match(/@([^\s@]*)$/);
@@ -438,6 +398,7 @@ export default function Home() {
     setMentionOpen(false);
     setParticipantsExpanded(false);
     setSelected([]);
+    setCandidateCards([]);
 
     try {
       const response = await fetch("/api/chat", {
@@ -467,11 +428,10 @@ export default function Home() {
           ...convertMeetingRequestToParsed(result.scheduleRequest),
           count: result.candidates.length,
         });
-        if (result.candidates.length) {
-          setCandidateCards(result.candidates.map(convertCandidateToCard));
-        }
+        setCandidateCards(result.candidates.map(convertCandidateToCard));
         setMobilePanel("insights");
       } else {
+        setCandidateCards([]);
         setMobilePanel("chat");
       }
     } catch (error) {
@@ -685,23 +645,27 @@ export default function Home() {
                 <span>{candidateCards.length}件</span>
               </div>
               <div className="candidate-list">
-                {candidateCards.map((candidate) => (
-                  <article className={`candidate-card ${candidate.variant ?? ""}`} key={candidate.time}>
-                    <div className="candidate-top">
-                      <div>
-                        <p className="candidate-date">{candidate.date}</p>
-                        <h3>{candidate.time}</h3>
+                {candidateCards.length ? (
+                  candidateCards.map((candidate) => (
+                    <article className={`candidate-card ${candidate.variant ?? ""}`} key={candidate.time}>
+                      <div className="candidate-top">
+                        <div>
+                          <p className="candidate-date">{candidate.date}</p>
+                          <h3>{candidate.time}</h3>
+                        </div>
+                        <span className="score">{candidate.score}</span>
                       </div>
-                      <span className="score">{candidate.score}</span>
-                    </div>
-                    <p>{candidate.reason}</p>
-                    <div className="tags">
-                      {candidate.tags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  </article>
-                ))}
+                      <p>{candidate.reason}</p>
+                      <div className="tags">
+                        {candidate.tags.map((tag) => (
+                          <span key={tag}>{tag}</span>
+                        ))}
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <p className="empty-state">候補日はまだありません。チャットで条件を送信するとここに表示されます。</p>
+                )}
               </div>
             </section>
 
